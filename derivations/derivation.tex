@@ -32,14 +32,14 @@ Let $\alpha, \beta, \gamma, \delta, \epsilon$ be tunable parameters.
 
 The state equations are given by:
 \begin{align*}
-    &\dot{x_1} = u_w f_w + u_s f_s + u_g - u_1 - (d - u_2) \\
+    &\dot{x_1} = u_w f_w + u_s f_s + u_g - u_1 + u_2 - d \\
     &\dot{x_2} = u_1 - u_2 - \epsilon x_2
 \end{align*}
 
 We seek to minimize the cost functional:
 
 \begin{equation*}
-    J[u, x] = \int_{t_0}^{t_f} (\alpha C_M + \beta C_E)u^2 + \gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta - u_2))^2 
+    J[u, x] = \int_{t_0}^{t_f} (\alpha C_M + \beta C_E)u^2 + \gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta))^2 
 \end{equation*}
 
 Subject to the constraints on battery capacity and the control input:
@@ -51,8 +51,8 @@ Subject to the constraints on battery capacity and the control input:
 We can use the Pontryagin's Minimum Principle to derive the necessary conditions for optimality.
 The Lagrangian is given by:
 \begin{align*}
-    \mathcal{L}(x, u, \lambda) &= p_1 (u_w f_w + u_s f_s + u_g - u_1 - (d - u_2)) + p_2 (u_1 - u_2 - \epsilon x_2) \\
-    & - (\alpha C_M + \beta C_E)\mathbf{u}^2 + \gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta - u_2))^2 \\
+    \mathcal{L}(x, u, \lambda, \mu) &= p_1 (u_w f_w + u_s f_s + u_g - u_1 + u_2 - d) + p_2 (u_1 - u_2 - \epsilon x_2) \\
+    & - (\alpha C_M + \beta C_E)\mathbf{u}^2 + \gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta))^2 \\
     & + \mu_1 x_2 + \mu_2 (x_2^{\max} - x_2) - \mathbf{\lambda}^T \mathbf{u}
 \end{align*}
 
@@ -71,13 +71,20 @@ The costate equations are given by:
     \dot{p_2} &= -\frac{\partial \mathcal{L}}{\partial x_2} = -\epsilon p_2 + \mu_1 - \mu_2
 \end{align*}
 
+Solving for the costate variables and applying the endpoint conditions $p(t_f) = 0$  gives:
+\begin{align*}
+    p_1(t) &= 0 \\
+    p_2(t) &= \frac{\mu_1 - \mu_2}{\epsilon}e^{-at}(e^{at}-e^{at_f})
+\end{align*}
+
+
 The optimality conditions are given by:
 \begin{align*}
-    u_1^* &= \frac{\partial \mathcal{L}}{\partial u_1} = -p_1 + p_2 - 2(\alpha C_{M_1} + \beta C_{E_1})u_1 - 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta - u_2)) - \lambda_1 = 0 \\
-    u_2^* &= \frac{\partial \mathcal{L}}{\partial u_2} = -p_1 - p_2 - 2(\alpha C_{M_1} + \beta C_{E_1})u_2 \\
-    u_g^* &= \frac{\partial \mathcal{L}}{\partial u_g} = 0 \\
-    u_w^* &= \frac{\partial \mathcal{L}}{\partial u_w} = 0 \\
-    u_s^* &= \frac{\partial \mathcal{L}}{\partial u_s} = 0
+    u_1^* &= \frac{\partial \mathcal{L}}{\partial u_1} = -p_1 + p_2 - 2(\alpha C_{M_1} + \beta C_{E_1})u_1 - 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta)) - \lambda_1 = 0 \\
+    u_2^* &= \frac{\partial \mathcal{L}}{\partial u_2} = -p_1 - p_2 - 2(\alpha C_{M_2} + \beta C_{E_2})u_2 + 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta)) - \lambda_2 = 0 \\
+    u_g^* &= \frac{\partial \mathcal{L}}{\partial u_g} = p_1 - 2(\alpha C_{M_g} + \beta C_{E_g})u_g + 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta)) - \lambda_3 = 0\\
+    u_w^* &= \frac{\partial \mathcal{L}}{\partial u_w} = p_1f_w - 2(\alpha C_{M_w} + \beta C_{E_w})u_w + 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta))f_w - \lambda_4 = 0\\
+    u_s^* &= \frac{\partial \mathcal{L}}{\partial u_s} = p_1f_s - 2(\alpha C_{M_s} + \beta C_{E_s})u_s + 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta))f_s - \lambda_5 = 0
 \end{align*}
 
 \end{document}
