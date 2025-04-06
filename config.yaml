@@ -1,0 +1,6 @@
+grid:
+  plants: [2, 3, 10]
+  mcosts: [3, 3, 2]
+  ccosts: [1, 1, 5]
+  weights: [1, 1, 1, 1]
+demand_fn: cos

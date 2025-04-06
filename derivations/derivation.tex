@@ -1,0 +1,83 @@
+\documentclass[12pt]{article}
+
+% Packages
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{geometry}
+\usepackage{graphicx}
+
+% Page layout
+\geometry{a4paper, margin=1in}
+
+% Title and Author
+\title{Derivation Document}
+\author{}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+Let $f_w$ be the rate of wind energy production, $f_s$ be the rate of solar energy production.
+Let $x = [x_1, x_2]$ be the state vector where $x_1$ is the amount of energy in the grid and
+ $x_2$ is the amount of energy in the battery.
+Let $u_1$ be the batery output, $u_2$ be the battery input, 
+$u_g$ be the gas energy production rate, $u_w$ be the wind energy production rate, and 
+$u_s$ be the solar energy production rate.
+Let $d$ be the demand rate.
+
+We let $\mathbf{u} = [u_1, u_2, u_g, u_w, u_s]^T$ be the control vector.
+Let $\alpha, \beta, \gamma, \delta, \epsilon$ be tunable parameters.
+
+The state equations are given by:
+\begin{align*}
+    &\dot{x_1} = u_w f_w + u_s f_s + u_g - u_1 - (d - u_2) \\
+    &\dot{x_2} = u_1 - u_2 - \epsilon x_2
+\end{align*}
+
+We seek to minimize the cost functional:
+
+\begin{equation*}
+    J[u, x] = \int_{t_0}^{t_f} (\alpha C_M + \beta C_E)u^2 + \gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta - u_2))^2 
+\end{equation*}
+
+Subject to the constraints on battery capacity and the control input:
+\begin{align*}
+    &0 \leq x_2 \leq x_2^{\max} \\
+    &\mathbf{u} \ge 0
+\end{align*}
+
+We can use the Pontryagin's Minimum Principle to derive the necessary conditions for optimality.
+The Lagrangian is given by:
+\begin{align*}
+    \mathcal{L}(x, u, \lambda) &= p_1 (u_w f_w + u_s f_s + u_g - u_1 - (d - u_2)) + p_2 (u_1 - u_2 - \epsilon x_2) \\
+    & - (\alpha C_M + \beta C_E)\mathbf{u}^2 + \gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta - u_2))^2 \\
+    & + \mu_1 x_2 + \mu_2 (x_2^{\max} - x_2) - \mathbf{\lambda}^T \mathbf{u}
+\end{align*}
+
+Subject to the conditions:
+\begin{align*}
+    &\mu_1, \mu_2 \geq 0 \\
+    &\mu_1 x_2 = 0 \\
+    &\mu_2 (x_2^{\max} - x_2) = 0 \\
+    &\mathbf{\lambda} \geq 0 \\
+    &\mathbf{\lambda}^T \mathbf{u} = 0 \\
+\end{align*}
+
+The costate equations are given by:
+\begin{align*}
+    \dot{p_1} &= -\frac{\partial \mathcal{L}}{\partial x_1} = 0 \\
+    \dot{p_2} &= -\frac{\partial \mathcal{L}}{\partial x_2} = -\epsilon p_2 + \mu_1 - \mu_2
+\end{align*}
+
+The optimality conditions are given by:
+\begin{align*}
+    u_1^* &= \frac{\partial \mathcal{L}}{\partial u_1} = -p_1 + p_2 - 2(\alpha C_{M_1} + \beta C_{E_1})u_1 - 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta - u_2)) - \lambda_1 = 0 \\
+    u_2^* &= \frac{\partial \mathcal{L}}{\partial u_2} = -p_1 - p_2 - 2(\alpha C_{M_1} + \beta C_{E_1})u_2 \\
+    u_g^* &= \frac{\partial \mathcal{L}}{\partial u_g} = 0 \\
+    u_w^* &= \frac{\partial \mathcal{L}}{\partial u_w} = 0 \\
+    u_s^* &= \frac{\partial \mathcal{L}}{\partial u_s} = 0
+\end{align*}
+
+\end{document}
