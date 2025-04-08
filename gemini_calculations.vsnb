@@ -1,0 +1,1451 @@
+{
+ "cells": [
+  {
+   "kind": 2,
+   "value": "(* 1. Define the Problem *)\n(* System Parameters *)\nGmax = 10;    (* Max natural gas power *)\nbmin = 0;     (* Min battery level *)\nbmax = 20;     (* Max battery level *)\nUcharge = 5;  (* Max charge rate *)\nUdischarge = 5; (* Max discharge rate *)\neta_c = 0.95; (* Charging efficiency *)\neta_d = 0.95; (* Discharging efficiency *)\nCw = 1;       (* Cost per unit wind capacity *)\nCv = 1;       (* Cost per unit solar capacity *)\nCg = 0.1;     (* Cost per unit natural gas power *)\nCb = 0.01;    (* Cost per unit battery charge/discharge *)\n\n(* Time Parameters *)\nt0 = 0;\ntf = 24; (* 24 hours *)\n\n(* Known Functions (Example) *)\nd[t_] := 5 + 3*Sin[t/12*Pi]; (* Example demand function *)\ncw[t_] := Abs[Sin[t/6*Pi]]; (* Example wind availability *)\ncv[t_] := UnitBox[t/12 - 0.5]; (* Example solar availability (day/night) *)\n\n(* 2. Define Variables *)\n(* Design Variables (to be optimized) *)\n(*W =.; (* Wind Capacity *)\nV =.; (* Solar Capacity *)*)\n\n(* State Variable *)\nb[t_] := b[t]; (* Battery level *)\n\n(* Control Variable *)\nu[t_] := u[t]; (* Battery charge/discharge rate *)\n\n(* Costates *)\np[t_] := p[t]; (* Costate for battery level *)\npW[t_] := pW[t];(* Costate for Wind Capacity *)\npV[t_] := pV[t];(* Costate for Solar Capacity *)\n\n(* Lagrange Multipliers *)\nmu1[t_] := mu1[t]; (* For g[t] >= 0 *)\nmu2[t_] := mu2[t]; (* For Gmax - g[t] >= 0 *)\nmu3[t_] := mu3[t]; (* For b[t] >= bmin *)\nmu4[t_] := mu4[t]; (* For bmax - b[t] >= 0 *)\nmu5[t_] := mu5[t]; (* For u[t] >= -Udischarge *)\nmu6[t_] := mu6[t]; (* For Ucharge - u[t] >= 0 *)\nmu7 := mu7;       (* For W >= 0 *)\nmu8 := mu8;       (* For V >= 0 *)\n\n(* 3. Define g[t], w[t], v[t] *)\n(* Installed capacities are design variables *)\nW =.;\nV =.;\n\n(* Power outputs *)\nw[t_] := W*cw[t];\nv[t_] := V*cv[t];\n\n(* Natural gas power (from demand matching) *)\ng[t_] := d[t] - w[t] - v[t] - u[t];\n\n(* 4. Define the Hamiltonian *)\nH[t_] := -Cg*g[t] - Cb*Abs[u[t]] + p[t]*(eta_c*Max[u[t], 0] + (1/eta_d)*Min[u[t], 0]) + pW[t]*0 + pV[t]*0;\n\n(* 5. Define the Lagrangian *)\nLagrangian[t_] := H[t] + mu1[t]*g[t] + mu2[t]*(Gmax - g[t]) + mu3[t]*(b[t] - bmin) +\n   mu4[t]*(bmax - b[t]) + mu5[t]*(u[t] + Udischarge) + mu6[t]*(Ucharge - u[t]) + mu7*W + mu8*V;\n\n(* 6. Necessary Conditions *)\n(* State Equation *)\nstateEquation = b'[t] == eta_c*Max[u[t], 0] + (1/eta_d)*Min[u[t], 0];\n\n(* Costate Equations *)\ncostateEquation = p'[t] == -D[Lagrangian[t], b[t]];\ncostateEquationW = pW'[t] == -D[Lagrangian[t], W];\ncostateEquationV = pV'[t] == -D[Lagrangian[t], V];\n\n(* Stationary Conditions *)\nstationaryConditions = {D[Lagrangian[t], u[t]] == 0, D[Lagrangian[t], W] == 0, D[Lagrangian[t], V] == 0};\n\n(* Complementary Slackness Conditions *)\ncomplementarySlackness = {\n   mu1[t]*g[t] == 0,\n   mu2[t]*(Gmax - g[t]) == 0,\n   mu3[t]*(b[t] - bmin) == 0,\n   mu4[t]*(bmax - b[t]) == 0,\n   mu5[t]*(u[t] + Udischarge) == 0,\n   mu6[t]*(Ucharge - u[t]) == 0,\n   mu7*W == 0,\n   mu8*V == 0\n};\n\n(* Inequality Constraints *)\ninequalityConstraints = {\n   g[t] >= 0,\n   Gmax - g[t] >= 0,\n   b[t] - bmin >= 0,\n   bmax - b[t] >= 0,\n   u[t] + Udischarge >= 0,\n   Ucharge - u[t] >= 0,\n   W >= 0,\n   V >= 0\n};\n\n(* Transversality Conditions *)\ninitialCondition = b[t0] == 5; (* Example initial battery level *)\ntransversalityConditions = {p[tf] == 0, pW[tf] == 0, pV[tf] == 0};\n\n(* 7. Casework (Illustrative - One Case) *)\n(* Define a specific case (example) *)\ncaseEquations = {\n   mu1[t] == 0,       (* g[t] > 0 *)\n   mu2[t] == 0,       (* Gmax - g[t] > 0 *)\n   b[t] == bmin,      (* Battery at min level *)\n   mu4[t] == 0,       (* b[t] < bmax *)\n   mu5[t] == 0,       (* u[t] > -Udischarge *)\n   Ucharge - u[t] == 0,(* Charging at max rate *)\n   W == 0,            (* No wind capacity *)\n   V > 0\n};\n\n(* Combine all equations *)\nallEquations = Join[{stateEquation, costateEquation, costateEquationW, costateEquationV},\n   stationaryConditions, complementarySlackness, {initialCondition}, transversalityConditions, caseEquations];\n\n(* Define variables to solve for *)\nvariablesToSolve = {b[t], u[t], p[t], W, V, pW[t], pV[t], mu1[t], mu2[t], mu3[t], mu4[t], mu5[t], mu6[t]};\n\n(* Solve the system numerically *)\nsolution = NDSolve[allEquations, variablesToSolve, {t, t0, tf}, MaxSteps -> Infinity];\n\n(* Print the solution *)\nPrint[\"Solution: \", solution]",
+   "languageId": "wolfram",
+   "outputs": [
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "645e3f26-3ea1-4097-83a1-edc275c924f6"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "9f826b79-0596-405f-b9b2-fdc47f2dd66e"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "e1d2e23e-5d02-4d9b-98d6-d86ced3c85bf"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "5428d79e-971b-4b3e-991d-60587515d35e"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "23d4abfd-b952-4e5e-b78c-dc813f1352f6"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "e59db432-8a57-4928-b67d-b6f8e46303c2"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "8de18d26-25a8-4dbb-807a-9e52998d9e2a"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "f8bd6e33-623f-44a9-b54e-9609ad3a83df"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "6b4067c9-2b23-4793-9c19-ad63b3a6f2c9"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "d34d4427-17d8-434e-bd26-a60157e53f85"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "6b7f4d56-06a3-4ee8-8ca7-b2604870674f"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "04326c67-44e6-4a38-b0d6-2e1a77e872a2"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "1c1ef719-a5dc-4203-b4ee-50b265cf9c17"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "60a353b0-2988-4e1b-8006-b0e668ce22cc"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "9bebc883-d24e-47cb-941f-2bcf584bc425"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "ac5cdbc9-330c-4cba-ba35-973acf194547"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "c40998e9-d3be-4c9a-a742-81443184335d"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "6c071091-2329-484e-aecf-fcc02539729a"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "938c209e-9612-4326-b78e-98aa1feff192"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "255f4b2c-be2c-4dfe-8d92-e3ed53773b62"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "e47f80e1-9e3b-4cd4-8cbc-96e069723c55"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "050315b4-e749-4a81-9983-85638575c15d"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "977670b2-6af5-47be-9e56-31d6e2703a31"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "5fd04d01-b6be-439a-b774-a79cb8f9f594"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "8446772a-d032-4a4e-b672-4a271cfc4b71"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "a8cf301c-550f-447a-9fb2-90b318da0ed1"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "526ccfb9-bffe-443d-9c4c-85ff39816a14"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "feb8bc1e-7e19-43c8-b5b5-0d42ce80a9ee"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "09f8336c-0a16-400b-bbdf-212f03170a2f"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "46d4f385-423d-4e89-a8ae-0d032cafd609"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "4ce4fd1e-0be9-494a-bd46-62f7d3dbf69f"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "9be627bf-902e-46b0-88b1-4d38b599a32c"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "e30216c8-72df-4704-a08a-44052c158cfb"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "e3e23559-0ec2-431b-b730-f467e2f363e5"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "9ec386a6-f5c7-443f-bcc1-f8de21d4f7da"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "f8e90f78-db8d-418b-b070-f2b36a6db707"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "efade5cd-6900-43c0-b041-3860c52ed484"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "77462268-ff0f-4107-a3f1-c495843d0e05"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "e602cf6c-c9e2-44a2-8a1a-480722df6d59"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "702d7fe9-c9a1-40f4-a0e8-671b1e98ed33"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "09f1b6b2-8cd2-46bc-ba98-855b9baac068"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "e0419f5b-ba1c-4855-92eb-a3b57b3891dc"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "ce25ef9e-ae1b-4156-9376-df1d928c5a62"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "a476ae54-92f3-4a3d-82c7-0c1b70afdef8"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "9b17d2b0-8c3e-416b-8c2c-15222fd3d1ec"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "a2e67713-a9e1-4194-be58-5f42ecddcad8"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "22ad724e-4b93-401f-99af-eca7c9be4732"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "ccb2db30-d29a-475f-990e-abda1bf8932e"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "cacc261b-292e-43ad-bf1a-72a967b85961"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "9a85f4f2-23bb-4145-80a7-5829211004af"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "7a388fed-afbc-4ab4-9719-acb12d36d478"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "5042363a-be84-4367-ad96-80223d74f8e5"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "7db29246-ed51-4882-a654-2abd05884c3e"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "347d42da-27e9-44ce-b966-4bd0d24d867f"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "ac6a4254-aab1-40a0-8024-231327e2fc77"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "c208cfca-afe9-49d3-a6f4-3edc6ebd86dd"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "3e062af8-b2bb-4f3d-a77d-229a2a8c5904"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "e05d5266-dfa4-4d51-b31b-0774712db74b"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "cb554cfa-d09b-4e34-8e78-28d6f33e5c19"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "344b7a28-ff69-48a5-a2e0-21f1eb16d0a2"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "de11e261-18d0-47e3-862d-0fb5599eafc6"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "7eb88a8a-2926-4e50-ad11-b4f18240cd51"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "704d776d-aa83-462e-a730-69ee451694ce"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "8bc25496-52e6-4ae1-9d44-b80e7464ae9b"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "15a695be-4097-4622-a285-5eb53df63835"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "241cfeb5-8438-414d-98a6-33dc3a118221"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "fdf3318c-9bf9-4a8d-9576-916e777e8046"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "8bedf3df-86fb-4724-8170-7824920f2529"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "b64b70f6-4bc6-4875-9c00-2c21c64b930d"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "a7711a54-6d58-42fe-8ff3-bc7f542b7271"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "38fbd886-9419-4e2b-bae6-8f877210c826"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "b9134341-8581-498a-9937-b9a1124d1f60"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "9cf2f2b4-b59a-40f9-8a63-278637b35912"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "9bf5ea99-ba6b-42e2-b6aa-905d7dffdf76"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "c3a028b6-15f4-4359-911e-e55ea631b29d"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "75d63f9d-9aba-4108-a97d-83b6c6b19cfa"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "ef54d046-536b-45bc-a7f5-5a8bc4481cbd"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "def45ac2-5b83-432f-bb12-0830897c0444"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "c9c780e2-613b-47b9-b110-79eba954916e"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "16706268-ce76-41c5-9390-96136bfa3b12"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "32b49f6b-0a47-414a-bdbd-c712754bd633"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "60e15df9-e5ce-49f9-8cf1-f87d4d776758"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "24b52f38-7e76-4d57-ae89-f77912178e6e"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "26d60fea-be74-4434-a921-9e8f2ddacd0f"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "ca94c61e-c773-470f-b528-41c509e0f9da"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "f468304a-e772-484d-9721-41d31c4cf819"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "87b483e1-eb3c-4e29-8ac0-3b24dba46445"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "276a12b3-7dd4-464d-ac33-4b1da17a3435"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "86413850-e893-4aa7-85f3-f9cda557981e"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "a6b37e95-b723-4aa1-bea3-302966fc95f5"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "d723a35d-3e76-45b7-8094-9cba14cca191"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "95c22600-c799-48d8-8444-e1e22e21b318"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "565428ad-bbd8-4889-a344-813fbd91a8ad"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "cd4b4944-ef30-4041-b9a5-ac659a365df9"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "ff1b5553-4db4-4309-be49-88695ee9a11d"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "c2202ce1-921f-47e7-a620-11837dbb2a08"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "3d60b53e-cd48-4384-b085-78f72839fa51"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "594b1a2d-f55d-4267-94b5-ffe061736716"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "972a27a7-0a41-4cb3-9ed1-cf47ba4e23cd"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "edd68a3c-cf7b-4a67-918f-008b4793ec1e"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "0a036e17-559c-4105-85a0-c6c636da737d"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "039afc44-14ab-403e-a61e-f48b7db714cf"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "0b81ae87-ac5d-4ff6-aa0d-6dac22f55fff"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "39b58a4b-ea53-416f-a8cb-1745b315f9c3"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "c23d6125-b168-4773-84dc-c2da6acc0fd4"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "d7712f01-4b1b-449c-aae0-01fd65eefd46"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "8b51667f-09bf-4876-80e6-c01e493d5c60"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "d845e05d-97f0-43f1-99e8-a495db794ce2"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "f85a41cb-91ba-45b7-8669-0178e4201e87"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "7ed575b7-acd3-4cd7-be80-248533a9e67e"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "fcb99218-5769-44aa-af60-847a03f78005"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "1d31e693-fe60-4642-a42b-963753cf1dce"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "bd1bb7c4-861a-46d9-bf3b-f498e45fa470"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "eaec174e-52cc-4169-8217-4cd30325d474"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "6123406b-c424-4521-9e86-5dbba9fa067a"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "7a7fb81d-f092-497d-92d4-598995e702a8"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "a1b1b953-cf02-4562-99ff-57244bad87d1"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "4ea00d62-fb67-47a2-af55-700f6f2b76dd"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "a78364bf-f430-4fc4-9da4-b6142708f8d8"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "8ab94c01-b3a1-417f-a358-897933e1207f"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "dfc40c02-d7e9-47e8-9101-bb544e223215"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "06a8c9ac-2263-4d5b-95db-293a178848f3"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "cf480577-dfc8-4e86-b2d8-a080afd4bad5"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "f6ab5cc3-6e13-45e2-8702-c8f04283eada"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "35cdb408-11b3-4047-9185-728985ae90b2"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "9c1c7329-7755-4d56-b84c-756a1aef8a94"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "90c67565-66e4-4332-a74f-3c6c24ed4820"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "9bd5f8f2-840e-4c86-93e7-eb0f354bd907"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "1f3d492b-b059-47d8-8054-c5b49098d956"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "99a977af-10af-413b-8362-2716e34fa17c"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "147ff86d-24f5-4136-b2d2-2be99bb1af46"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "b1accfb4-b25d-437f-8f89-3aef70e125a5"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "234f03e5-637b-4866-be0c-6f5ef0808ad2"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "0b8235da-6bf2-4a3f-8980-fce8a12109b2"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "86b20c0a-04f4-4631-8eec-f821cd875456"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "13c32e8c-78c0-41af-8d54-93c673c4761c"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "7be0583d-3288-46d1-8e41-495716233718"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "f80646c3-f221-4409-98ba-3598c420be9c"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "e1551935-6eb3-4e39-bdf4-41e685355e70"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "2738f1e2-0701-4cd0-b3f9-3d9b22df7858"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "ee2ecf19-f099-471f-a732-08790200b69d"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "98758ff6-3be5-4458-808c-499d2ee19362"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "92ad6eae-8fd4-48d3-ba1f-7e4f5cc44e5a"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "78779eab-510d-4059-9181-ed9d148c82e0"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "7d377f63-d1ba-43df-bfd3-452f34a65158"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "bf3ec387-a781-4acb-86a6-15d9cf458e4f"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "be268121-a3de-4dab-8953-43312817c33c"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "c73c8bb6-aae8-42fd-a84e-77340298f184"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "558d1711-fb45-4eb2-924e-26ee0f6ec494"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "20015e70-c839-44f6-9fcc-f604172c1636"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "73b88ec6-111c-49df-ac13-4340e1388393"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "d2e5cd07-c807-4719-be0e-f5943ac18d61"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "d5b2ee03-1890-4afe-9bb5-5516d869fe4a"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "a2cb9ff0-cf99-45ea-a43c-1dc4b3491e22"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "44a0ea8b-240d-445c-893a-2f352e472510"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "d792b36f-fe8c-4f36-bcb4-ade19f4f1edf"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre><span class=\"wl-message\">$IterationLimit::itlim</span>: Iteration limit of 400000 exceeded.</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "370e9ad5-46b1-4a23-a184-00a0e01dd664"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre>                                                                                                                                                          Min[0, TerminatedEvaluation[IterationLimit]]                                                                      Min[0, TerminatedEvaluation[IterationLimit]]                                                                                                                                       Piecewise[{{1, TerminatedEvaluation[IterationLimit] < 0}, {0, TerminatedEvaluation[IterationLimit] > 0}}, Indeterminate]                                                                                                                  Pi t                                  t                                                                  Min[0, TerminatedEvaluation[IterationLimit]]                                                                                                                                       Piecewise[{{1, TerminatedEvaluation[IterationLimit] < 0}, {0, TerminatedEvaluation[IterationLimit] > 0}}, Indeterminate]                                                                                                                 Pi t                                 t                                                             Pi t           Pi t                                                           t                                                              Pi t           Pi t                                                           t                                              2\n<span class=\"wl-message\">NDSolve::deqn</span>: Equation or list of equations expected instead of V > 0 in the first argument {0 == Max[0, TerminatedEvaluation[IterationLimit]] (eta_c) + --------------------------------------------, 0 == -40.1 - Max[0, TerminatedEvaluation[IterationLimit]] (eta_c) - -------------------------------------------- - ((eta_c) Piecewise[{{0, TerminatedEvaluation[IterationLimit] < 0}, {1, TerminatedEvaluation[IterationLimit] > 0}}, Indeterminate] + ------------------------------------------------------------------------------------------------------------------------) TerminatedEvaluation[IterationLimit] + 0.01 Abs'[TerminatedEvaluation[IterationLimit]], 0 == -mu7 - 0.1 Abs[Sin[----]], 0 == -mu8 - 0.1 UnitBox[0.5 - --], 40.1 + Max[0, TerminatedEvaluation[IterationLimit]] (eta_c) + -------------------------------------------- + ((eta_c) Piecewise[{{0, TerminatedEvaluation[IterationLimit] < 0}, {1, TerminatedEvaluation[IterationLimit] > 0}}, Indeterminate] + ------------------------------------------------------------------------------------------------------------------------) TerminatedEvaluation[IterationLimit] - 0.01 Abs'[TerminatedEvaluation[IterationLimit]] == 0, mu7 + 0.1 Abs[Sin[----]] == 0, mu8 + 0.1 UnitBox[0.5 - --] == 0, TerminatedEvaluation[IterationLimit] (5 - W Abs[Sin[----]] + 3 Sin[----] - TerminatedEvaluation[IterationLimit] - V UnitBox[0.5 - --]) == 0, TerminatedEvaluation[IterationLimit] (5 + W Abs[Sin[----]] - 3 Sin[----] + TerminatedEvaluation[IterationLimit] + V UnitBox[0.5 - --]) == 0, TerminatedEvaluation[IterationLimit]  == 0, (20 - TerminatedEvaluation[IterationLimit]) TerminatedEvaluation[IterationLimit] == 0, TerminatedEvaluation[IterationLimit] (5 + TerminatedEvaluation[IterationLimit]) == 0, (5 - TerminatedEvaluation[IterationLimit]) TerminatedEvaluation[IterationLimit] == 0, mu7 W == 0, mu8 V == 0, TerminatedEvaluation[IterationLimit] == 5, TerminatedEvaluation[IterationLimit] == 0, TerminatedEvaluation[IterationLimit] == 0, TerminatedEvaluation[IterationLimit] == 0, TerminatedEvaluation[IterationLimit] == 0, TerminatedEvaluation[IterationLimit] == 0, TerminatedEvaluation[IterationLimit] == 0, TerminatedEvaluation[IterationLimit] == 0, TerminatedEvaluation[IterationLimit] == 0, 5 - TerminatedEvaluation[IterationLimit] == 0, W == 0, V > 0}.\n                                                                                                                                                                             eta_d                                                                                                             eta_d                                                                                                                                                                                                                    eta_d                                                                                                                                                                             6                                    12                                                                                    eta_d                                                                                                                                                                                                                    eta_d                                                                                                                                                                            6                                   12                                                             6              12                                                            12                                                              6              12                                                            12</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "5c731cbb-8ee6-4ce4-a085-a7fc16cb0177"
+    },
+    {
+     "items": [
+      {
+       "data": "<pre>Solution: NDSolve[{0 == Max[0, TerminatedEvaluation[IterationLimit]] \n \n                   Min[0, TerminatedEvaluation[IterationLimit]]\n>        (eta_c) + --------------------------------------------, \n                                      eta_d\n \n>     0 == -40.1 - Max[0, TerminatedEvaluation[IterationLimit]] (eta_c) - \n \n        Min[0, TerminatedEvaluation[IterationLimit]]\n>       -------------------------------------------- - \n                           eta_d\n \n>       ((eta_c) Piecewise[{{0, TerminatedEvaluation[IterationLimit] < 0}, \n \n>             {1, TerminatedEvaluation[IterationLimit] > 0}}, Indeterminate]\\\n \n>           + Piecewise[{{1, TerminatedEvaluation[IterationLimit] < 0}, \n \n>             {0, TerminatedEvaluation[IterationLimit] > 0}}, Indeterminate]\\\n \n>            / (eta_d)) TerminatedEvaluation[IterationLimit] + \n \n>       0.01 Abs'[TerminatedEvaluation[IterationLimit]], \n \n                              Pi t                                  t\n>     0 == -mu7 - 0.1 Abs[Sin[----]], 0 == -mu8 - 0.1 UnitBox[0.5 - --], \n                               6                                    12\n \n>     40.1 + Max[0, TerminatedEvaluation[IterationLimit]] (eta_c) + \n \n        Min[0, TerminatedEvaluation[IterationLimit]]\n>       -------------------------------------------- + \n                           eta_d\n \n>       ((eta_c) Piecewise[{{0, TerminatedEvaluation[IterationLimit] < 0}, \n \n>             {1, TerminatedEvaluation[IterationLimit] > 0}}, Indeterminate]\\\n \n>           + Piecewise[{{1, TerminatedEvaluation[IterationLimit] < 0}, \n \n>             {0, TerminatedEvaluation[IterationLimit] > 0}}, Indeterminate]\\\n \n>            / (eta_d)) TerminatedEvaluation[IterationLimit] - \n \n>       0.01 Abs'[TerminatedEvaluation[IterationLimit]] == 0, \n \n                        Pi t                                 t\n>     mu7 + 0.1 Abs[Sin[----]] == 0, mu8 + 0.1 UnitBox[0.5 - --] == 0, \n                         6                                   12\n \n>     TerminatedEvaluation[IterationLimit] \n \n                       Pi t           Pi t\n>       (5 - W Abs[Sin[----]] + 3 Sin[----] - \n                        6              12\n \n                                                                 t\n>         TerminatedEvaluation[IterationLimit] - V UnitBox[0.5 - --]) == 0, \n                                                                 12\n \n>     TerminatedEvaluation[IterationLimit] \n \n                       Pi t           Pi t\n>       (5 + W Abs[Sin[----]] - 3 Sin[----] + \n                        6              12\n \n                                                                 t\n>         TerminatedEvaluation[IterationLimit] + V UnitBox[0.5 - --]) == 0, \n                                                                 12\n \n                                          2\n>     TerminatedEvaluation[IterationLimit]  == 0, \n \n>     (20 - TerminatedEvaluation[IterationLimit]) \n \n>       TerminatedEvaluation[IterationLimit] == 0, \n \n>     TerminatedEvaluation[IterationLimit] \n \n>       (5 + TerminatedEvaluation[IterationLimit]) == 0, \n \n>     (5 - TerminatedEvaluation[IterationLimit]) \n \n>       TerminatedEvaluation[IterationLimit] == 0, mu7 W == 0, mu8 V == 0, \n \n>     TerminatedEvaluation[IterationLimit] == 5, \n \n>     TerminatedEvaluation[IterationLimit] == 0, \n \n>     TerminatedEvaluation[IterationLimit] == 0, \n \n>     TerminatedEvaluation[IterationLimit] == 0, \n \n>     TerminatedEvaluation[IterationLimit] == 0, \n \n>     TerminatedEvaluation[IterationLimit] == 0, \n \n>     TerminatedEvaluation[IterationLimit] == 0, \n \n>     TerminatedEvaluation[IterationLimit] == 0, \n \n>     TerminatedEvaluation[IterationLimit] == 0, \n \n>     5 - TerminatedEvaluation[IterationLimit] == 0, W == 0, V > 0}, \n \n>    {TerminatedEvaluation[IterationLimit], \n \n>     TerminatedEvaluation[IterationLimit], \n \n>     TerminatedEvaluation[IterationLimit], W, V, \n \n>     TerminatedEvaluation[IterationLimit], \n \n>     TerminatedEvaluation[IterationLimit], \n \n>     TerminatedEvaluation[IterationLimit], \n \n>     TerminatedEvaluation[IterationLimit], \n \n>     TerminatedEvaluation[IterationLimit], \n \n>     TerminatedEvaluation[IterationLimit], \n \n>     TerminatedEvaluation[IterationLimit], \n \n>     TerminatedEvaluation[IterationLimit]}, {t, 0, 24}, MaxSteps -> Infinity]\n</pre>",
+       "mime": "x-application/wolfram-language-html"
+      }
+     ],
+     "id": "ca5dcc66-accc-4fad-97f1-ea67e59cb940"
+    }
+   ],
+   "metadata": {},
+   "executionSummary": {
+    "timing": {
+     "startTime": 1744002803657,
+     "endTime": 1744002819937
+    },
+    "executionOrder": 715,
+    "success": true
+   }
+  }
+ ]
+}

@@ -1,0 +1,35 @@
+s = 10;
+x2max = 5; 
+
+stateVariables = {x1[t], x2[t]};
+controlVariables = {u1[t], u2[t]};
+costateVariables = {p1[t], p2[t]};
+
+stateEquations = {
+    x1'[t] == u2[t] - u1[t] + s*fs[t] - d,
+    x2'[t] == u1[t] - u2[t] - epsilon * x2[t]
+};
+
+objectiveFunction := C1*u1[t]^2 + C2*u2[t]^2 + (u2[t] - u1[t] + s*fs[t] - d[t])^2;
+
+inequalityConstraints = {
+    -u1[t] <= 0;
+    -u2[t] <= 0;
+    -x2[t] <= 0;
+    -(x2[t] - x2max) <= 0;
+};
+
+lagrangeMultipliers = {mu1[t], mu2[t], mu3[t], mu4[t]};
+
+f = {u2[t] - u1[t] + s*fs[t] - d[t], u1[t] - u2[t] - epsilon * x2[t]};
+
+H[t_] := Sum[costateVariables[[i]]*f[[i]], {i, Length[stateVariables]}] - objectiveFunction;
+L[t_] := H[t] - Sum[lagrangeMultipliers[[i]]*inequalityConstraints[[i, 1]], {i, Length[inequalityConstraints]}];
+
+costateEquations = {
+   p1'[t] == -D[H[t], x1[t]],
+   p2'[t] == -D[H[t], x2[t]]
+};
+
+Print["Costate Equations: "];
+costateEquations // Simplify

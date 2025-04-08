@@ -74,7 +74,7 @@ The costate equations are given by:
 Solving for the costate variables and applying the endpoint conditions $p(t_f) = 0$  gives:
 \begin{align*}
     p_1(t) &= 0 \\
-    p_2(t) &= \frac{\mu_1 - \mu_2}{\epsilon}e^{-\epsilon t}(e^{\epsilon t}-e^{\epsilon t_f})
+    p_2(t) &= e^{-\epsilon t} \int_{t_f}^t e^{\epsilon \tau} (\mu_1(\tau) + \mu_2(\tau)) d\tau
 \end{align*}
 
 
@@ -86,5 +86,23 @@ The optimality conditions are given by:
     u_w^* &= \frac{\partial \mathcal{L}}{\partial u_w} = p_1f_w - 2(\alpha C_{M_w} + \beta C_{E_w})u_w + 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta))f_w - \lambda_4 = 0\\
     u_s^* &= \frac{\partial \mathcal{L}}{\partial u_s} = p_1f_s - 2(\alpha C_{M_s} + \beta C_{E_s})u_s + 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta))f_s - \lambda_5 = 0
 \end{align*}
+
+We solve for optimal control inputs \\
+
+(Solving for $u_1$):
+\begin{align*}
+    p_2 - 2(\alpha C_{M_1} + \beta C_{E_1})u_1 - 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta)) - \lambda_1 = 0 \\
+    p_2 - 2(\alpha C_{M_1} + \beta C_{E_1})u_1 + 2\gamma u_1 - 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - (d + \delta)) - \lambda_1 = 0 \\
+    - 2(\alpha C_{M_1} + \beta C_{E_1})u_1 + 2\gamma u_1 = \lambda_1 - p_2 + 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - (d + \delta)) \\
+    u_1 = \frac{\lambda_1 - p_2 + 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - (d + \delta))}{2\gamma - 2(\alpha C_{M_1} + \beta C_{E_1})} \\
+\end{align*}
+
+(Solving for $u_2$):
+\begin{align*}
+    - p_2 - 2(\alpha C_{M_2} + \beta C_{E_2})u_2 + 2\gamma (u_w f_w + u_s f_s + u_g + u_2 - u_1 - (d + \delta)) - \lambda_2 = 0 \\
+    - p_2 + 2\gamma u_2 - 2(\alpha C_{M_2} + \beta C_{E_2})u_2 + 2\gamma (u_w f_w + u_s f_s + u_g - u_1 - (d + \delta)) = \lambda_2 \\
+    u_2 = \frac{\lambda_2 + p_2 - 2\gamma (u_w f_w + u_s f_s + u_g - u_1 - (d + \delta))}{2\gamma - 2(\alpha C_{M_2} + \beta C_{E_2})} \\
+\end{align*}
+
 
 \end{document}
