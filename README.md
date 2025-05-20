@@ -1,4 +1,4 @@
-# electro-bros
+# optimized-sailing
 Optimized sailing in different conditions:
 - water currents with a motor
 - wind currents with a sail
